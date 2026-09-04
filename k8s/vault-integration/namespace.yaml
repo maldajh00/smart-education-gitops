@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: smart-education
+  labels:
+    name: smart-education
+    app.kubernetes.io/part-of: smart-education-portal
+    # Pod Security Admission — enforce the "restricted" profile at the
+    # namespace boundary. All workloads here already comply (runAsNonRoot,
+    # drop ALL caps, seccomp RuntimeDefault, allowPrivilegeEscalation:false).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
