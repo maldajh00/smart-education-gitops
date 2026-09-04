@@ -1,0 +1,18 @@
+# With a single replica, maxUnavailable: 0 (equivalent to minAvailable: 1)
+# means voluntary disruptions (node drain / cluster autoscaler / upgrade)
+# will be blocked, forcing the operator to acknowledge the outage rather
+# than the DB going down silently mid-drain.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/component: server
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+      app.kubernetes.io/component: server

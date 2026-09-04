@@ -1,0 +1,54 @@
+# Two Services:
+#
+# - vault (ClusterIP): the address ESO and operators talk to.
+# - vault-internal (Headless): required by the StatefulSet's serviceName
+#   so per-pod DNS (vault-0.vault-internal.vault.svc) resolves. Even
+#   with a single replica today, using a proper headless service now
+#   makes a future raft/HA migration a config-only change.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/component: server
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/component: server
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+      protocol: TCP
+    - name: cluster
+      port: 8201
+      targetPort: 8201
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-internal
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/component: server-internal
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/component: server
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+      protocol: TCP
+    - name: cluster
+      port: 8201
+      targetPort: 8201
+      protocol: TCP

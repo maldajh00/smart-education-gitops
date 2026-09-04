@@ -1,0 +1,20 @@
+# Dedicated namespace for HashiCorp Vault.
+#
+# PSA is baseline (not restricted). Vault typically wants IPC_LOCK for
+# mlock; we disable_mlock in the config so no elevated capabilities are
+# actually needed, but baseline gives headroom for the audit sidecar,
+# init containers, or a future migration to raft storage.
+#
+# The smart-education namespace stays at PSA restricted regardless.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vault
+  labels:
+    name: vault
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/part-of: smart-education-platform
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

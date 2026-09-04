@@ -9,3 +9,9 @@ namespace: argocd
 resources:
   - app-project.yaml
   - application.yaml
+  # Infra AppProject + Applications for Vault and External Secrets
+  # Operator. These are bootstrap material for the argocd namespace and
+  # are applied once, out-of-band, alongside app-project.yaml/application.yaml.
+  - infra-app-project.yaml
+  - vault-application.yaml
+  - external-secrets-application.yaml

@@ -1,0 +1,15 @@
+# Kustomize bundle for ESO-adjacent, non-Helm resources.
+# The ESO controller itself is installed via the smart-education-eso
+# ArgoCD Application (Helm source pinned to chart 0.10.5). This bundle
+# holds the namespace and NetworkPolicies so they live in git alongside
+# the Helm-driven install.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - network-policy.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: smart-education-platform
+  app.kubernetes.io/managed-by: argocd

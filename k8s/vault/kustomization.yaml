@@ -1,0 +1,19 @@
+# Kustomize bundle for the Vault infrastructure. Applied by the
+# smart-education-infra ArgoCD Application, NOT by smart-education-prod
+# (the destination namespace differs).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - clusterrolebinding.yaml
+  - configmap.yaml
+  - service.yaml
+  - statefulset.yaml
+  - pdb.yaml
+  - network-policy.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: smart-education-platform
+  app.kubernetes.io/managed-by: argocd

@@ -1,0 +1,42 @@
+# Vault server HCL configuration.
+#
+# - file storage backend: PVC-backed, single-node demo. NOT for HA.
+# - disable_mlock = true: keeps the container out of needing IPC_LOCK
+#   capability (PSA baseline compatible). Trade-off: Vault will not lock
+#   sensitive memory, so pages may swap. Acceptable for a free-trial
+#   demo; use raft + IPC_LOCK for real production.
+# - listener tls_disable = true: internal-only ClusterIP traffic; add
+#   TLS + a cert-manager Certificate when Vault leaves the cluster.
+# - api_addr / cluster_addr: internal service DNS.
+# - audit device is enabled at bootstrap (see scripts/bootstrap-vault.sh)
+#   rather than baked in, because Vault refuses to start if the audit
+#   destination is unreachable.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/component: server
+data:
+  vault.hcl: |
+    ui            = false
+    disable_mlock = true
+    api_addr      = "http://vault.vault.svc:8200"
+    cluster_addr  = "https://vault.vault.svc:8201"
+
+    listener "tcp" {
+      address     = "0.0.0.0:8200"
+      tls_disable = true
+    }
+
+    storage "file" {
+      path = "/vault/data"
+    }
+
+    # Telemetry disabled by default. Enable prometheus scrape here later:
+    # telemetry {
+    #   prometheus_retention_time = "24h"
+    #   disable_hostname          = true
+    # }

@@ -1,0 +1,83 @@
+# Helm values consumed by the smart-education-eso ArgoCD Application.
+# The Application pins the chart version explicitly:
+#   repoURL:        https://charts.external-secrets.io
+#   chart:          external-secrets
+#   targetRevision: 0.10.5   (never `latest`; bump deliberately)
+#
+# Every ESO component pinned to the management node pool. Application
+# nodes must never run ESO — they run application workloads only.
+
+installCRDs: true
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/external-secrets/external-secrets
+  tag: v0.10.5
+  pullPolicy: IfNotPresent
+
+nodeSelector:
+  workload: management
+tolerations:
+  - key: workload
+    operator: Equal
+    value: management
+    effect: NoSchedule
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+webhook:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/external-secrets/external-secrets
+    tag: v0.10.5
+    pullPolicy: IfNotPresent
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+certController:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/external-secrets/external-secrets
+    tag: v0.10.5
+    pullPolicy: IfNotPresent
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# No LoadBalancer; ClusterIP webhook is fine.
+# No metrics scraping wired in this phase.
+serviceMonitor:
+  enabled: false
+
+# leaderElect true is safe with replicaCount 1 and will still coordinate
+# if we ever scale up.
+leaderElect: true

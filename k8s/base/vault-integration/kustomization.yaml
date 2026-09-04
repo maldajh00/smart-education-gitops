@@ -1,0 +1,15 @@
+# Vault integration resources that live in the smart-education namespace.
+# Included by ../kustomization.yaml so they sync with the rest of the app,
+# but ordered ahead via ArgoCD sync waves so backend-secret exists before
+# Postgres/backend consume it.
+#
+# Note: the HCL policy file under policies/ is NOT applied by Kustomize.
+# It is deliberately kept adjacent to the manifests as review material
+# and is loaded by scripts/bootstrap-vault.sh at Vault bootstrap time.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - external-secrets-sa.yaml
+  - cluster-secret-store.yaml
+  - external-secret.yaml

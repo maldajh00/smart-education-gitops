@@ -15,11 +15,16 @@ metadata:
     app.kubernetes.io/component: migration
     app.kubernetes.io/part-of: smart-education-portal
   annotations:
-    # ArgoCD sync hook: run this Job before the app manifests are applied.
-    # BeforeHookCreation deletes the previous Job just before the new one
-    # starts so image/tag changes always run the matching migration.
-    argocd.argoproj.io/hook: PreSync
+    # ArgoCD Sync hook (NOT PreSync): PreSync would run before the
+    # ExternalSecret materializes `backend-secret`, which the migration
+    # container consumes via envFrom. Using a Sync hook with sync-wave
+    # "5" schedules the Job after ExternalSecret (wave -5) and Postgres
+    # (wave -1) but before backend (wave 10).
+    # BeforeHookCreation deletes the previous Job just before the new
+    # one starts so image/tag changes always run the matching migration.
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "5"
 spec:
   backoffLimit: 2
   ttlSecondsAfterFinished: 3600

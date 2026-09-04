@@ -1,0 +1,144 @@
+# Vault server StatefulSet.
+#
+# - Single replica, file storage, PVC-backed. Free-trial demo topology.
+# - Pinned image tag (no :latest). Update deliberately.
+# - Pinned to management node via nodeSelector + toleration for the
+#   workload=management:NoSchedule taint set on that pool. Vault must
+#   not land on an application node.
+# - Non-root, dropped caps, readOnlyRootFilesystem. Vault only writes to
+#   /vault/data (PVC), /vault/audit (emptyDir), /tmp (emptyDir).
+# - Sync wave -25: after Vault namespace/RBAC (-30) but before ESO.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/component: server
+  annotations:
+    argocd.argoproj.io/sync-wave: "-25"
+spec:
+  serviceName: vault-internal
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vault
+        app.kubernetes.io/component: server
+    spec:
+      serviceAccountName: vault
+      automountServiceAccountToken: true
+      nodeSelector:
+        workload: management
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: management
+          effect: NoSchedule
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100          # 'vault' uid in the official image
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vault
+          image: hashicorp/vault:1.18.1
+          imagePullPolicy: IfNotPresent
+          command: ["vault"]
+          args: ["server", "-config=/vault/config/vault.hcl"]
+          ports:
+            - name: http
+              containerPort: 8200
+              protocol: TCP
+            - name: cluster
+              containerPort: 8201
+              protocol: TCP
+          env:
+            - name: VAULT_ADDR
+              value: "http://127.0.0.1:8200"
+            - name: VAULT_API_ADDR
+              value: "http://$(POD_IP):8200"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SKIP_CHOWN
+              value: "true"
+            - name: SKIP_SETCAP
+              value: "true"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          # Readiness: 204 while sealed/uninitialized is expected during
+          # bootstrap. Once initialized+unsealed the endpoint returns 200.
+          readinessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
+              port: 8200
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204&perfstandbyok=true
+              port: 8200
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /vault/config
+              readOnly: true
+            - name: data
+              mountPath: /vault/data
+            - name: audit
+              mountPath: /vault/audit
+            - name: home
+              mountPath: /home/vault
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: vault-config
+        # Audit device lives in an emptyDir. Trade-off documented in the
+        # phase report: audit log is ephemeral (lost with pod). For a
+        # permanent audit trail, mount a second PVC of ~1Gi here.
+        - name: audit
+          emptyDir: {}
+        - name: home
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: vault
+          app.kubernetes.io/component: server
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

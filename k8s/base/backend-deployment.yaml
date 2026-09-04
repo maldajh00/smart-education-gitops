@@ -8,6 +8,9 @@ metadata:
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: smart-education-portal
     app.kubernetes.io/version: "1.0.0"
+  annotations:
+    # After migration Job (wave 5) and Postgres (wave -1).
+    argocd.argoproj.io/sync-wave: "10"
 spec:
   replicas: 3
   revisionHistoryLimit: 5

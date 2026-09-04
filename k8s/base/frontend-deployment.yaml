@@ -8,6 +8,9 @@ metadata:
     app.kubernetes.io/component: web
     app.kubernetes.io/part-of: smart-education-portal
     app.kubernetes.io/version: "1.0.0"
+  annotations:
+    # After backend (wave 10).
+    argocd.argoproj.io/sync-wave: "20"
 spec:
   replicas: 2
   revisionHistoryLimit: 5

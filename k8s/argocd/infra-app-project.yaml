@@ -1,0 +1,53 @@
+# ArgoCD AppProject for infrastructure Applications.
+#
+# Separate from smart-education (application AppProject) because the
+# infra components live in different namespaces (vault, external-secrets)
+# and need to create cluster-scoped resources (Namespace,
+# ClusterRoleBinding, CRDs from the ESO Helm chart).
+#
+# Source repos:
+# - this GitOps repo for Vault + ESO NP manifests
+# - https://charts.external-secrets.io for the ESO Helm chart
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: smart-education-infra
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Smart Education Portal — infrastructure (Vault + ESO)
+
+  sourceRepos:
+    - https://github.com/maldajh00/smart-education-gitops.git
+    - https://charts.external-secrets.io
+
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: vault
+    - server: https://kubernetes.default.svc
+      namespace: external-secrets
+
+  # Infra needs cluster-scoped kinds. Whitelisted narrowly.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  orphanedResources:
+    warn: true
+
+  roles: []

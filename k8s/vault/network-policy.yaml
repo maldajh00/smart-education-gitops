@@ -1,0 +1,90 @@
+# Network isolation for the Vault namespace.
+#
+# - default-deny: nothing enters or leaves the vault namespace unless
+#   another policy explicitly allows it.
+# - allow-vault-ingress-eso: only pods labeled ESO controller in the
+#   external-secrets namespace may reach Vault on 8200.
+# - allow-vault-egress: Vault needs the Kubernetes API (TokenReview
+#   during auth/kubernetes login) and DNS.
+#
+# Application pods (backend/frontend/postgres) intentionally have NO path
+# to Vault — the backend never authenticates to Vault directly.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: vault
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-vault-ingress-eso
+  namespace: vault
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+      app.kubernetes.io/component: server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: external-secrets
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: external-secrets
+      ports:
+        - port: 8200
+          protocol: TCP
+    # Operators using `kubectl port-forward` originate from the API server
+    # side, which is out-of-cluster on GKE and not covered by pod labels;
+    # port-forward works through the kubelet and bypasses NetworkPolicy.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-vault-egress
+  namespace: vault
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+      app.kubernetes.io/component: server
+  policyTypes: [Egress]
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Kubernetes API (TokenReview). On GKE the control plane is
+    # out-of-cluster; a namespaceSelector cannot match it. Allow 443 to
+    # any destination for the Vault SA to reach kubernetes.default.svc.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+    # Cluster peer traffic (harmless with 1 replica; needed if raft added).
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault
+      ports:
+        - port: 8201
+          protocol: TCP
