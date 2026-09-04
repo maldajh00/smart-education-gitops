@@ -1,0 +1,9 @@
+# Application-side ExternalSecret.
+#
+# The ClusterSecretStore is infrastructure-owned. This resource only
+# consumes that store and materializes backend-secret in smart-education.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - external-secret.yaml

@@ -8,6 +8,7 @@
 # Source repos:
 # - this GitOps repo for Vault + ESO NP manifests
 # - https://charts.external-secrets.io for the ESO Helm chart
+
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -15,6 +16,7 @@ metadata:
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
+
 spec:
   description: Smart Education Portal — infrastructure (Vault + ESO)
 
@@ -25,23 +27,35 @@ spec:
   destinations:
     - server: https://kubernetes.default.svc
       namespace: vault
+
     - server: https://kubernetes.default.svc
       namespace: external-secrets
+
+    - server: https://kubernetes.default.svc
+      namespace: smart-education
 
   # Infra needs cluster-scoped kinds. Whitelisted narrowly.
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
+
     - group: rbac.authorization.k8s.io
       kind: ClusterRole
+
     - group: rbac.authorization.k8s.io
       kind: ClusterRoleBinding
+
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
+
     - group: admissionregistration.k8s.io
       kind: ValidatingWebhookConfiguration
+
     - group: admissionregistration.k8s.io
       kind: MutatingWebhookConfiguration
+
+    - group: external-secrets.io
+      kind: ClusterSecretStore
 
   namespaceResourceWhitelist:
     - group: "*"

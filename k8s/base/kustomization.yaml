@@ -35,4 +35,4 @@ resources:
   # external-secrets ServiceAccount, the ClusterSecretStore reference, and
   # the ExternalSecret that materializes `backend-secret`. Ordered ahead of
   # postgres/backend via ArgoCD sync waves so the Secret exists first.
-  - vault-integration
+  - external-secret

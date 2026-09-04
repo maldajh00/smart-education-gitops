@@ -1,0 +1,11 @@
+# Infrastructure-side Vault integration.
+#
+# These resources are owned by the infrastructure ArgoCD project because
+# ClusterSecretStore is cluster-scoped and the ESO service account is part
+# of the Vault/ESO authentication boundary.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - external-secrets-sa.yaml
+  - cluster-secret-store.yaml

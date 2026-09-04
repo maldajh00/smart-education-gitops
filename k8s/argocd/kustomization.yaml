@@ -15,3 +15,4 @@ resources:
   - infra-app-project.yaml
   - vault-application.yaml
   - external-secrets-application.yaml
+  - vault-integration-application.yaml
