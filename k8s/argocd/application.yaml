@@ -1,0 +1,50 @@
+# ArgoCD Application: smart-education-prod
+#
+# Desired state:  maldajh00/smart-education-gitops @ main : k8s/overlays/prod
+# Actual state:   the smart-education namespace on the local GKE cluster
+#
+# ArgoCD continuously reconciles the two. On drift (manual kubectl edit),
+# selfHeal reverts the cluster to match git. On a git change (new image
+# SHA committed by app-repo CI), automated sync rolls it out.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: smart-education-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: smart-education
+
+  source:
+    repoURL: https://github.com/maldajh00/smart-education-gitops.git
+    targetRevision: main
+    # This path is relative to the GitOps repo root (this file already
+    # lives IN that repo, so no `gitops/` prefix).
+    path: k8s/overlays/prod
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: smart-education
+
+  syncPolicy:
+    automated:
+      prune: true       # remove resources deleted from git
+      selfHeal: true    # revert manual cluster drift
+      allowEmpty: false
+
+    syncOptions:
+      - ServerSideApply=true
+      - PruneLast=true
+      - CreateNamespace=false     # base includes namespace.yaml
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true
+
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+
+  revisionHistoryLimit: 10

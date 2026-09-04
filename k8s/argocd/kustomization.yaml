@@ -1,0 +1,11 @@
+# NOT sync'd by ArgoCD itself — this is bootstrap material for the argocd
+# namespace that must exist before the smart-education Application can be
+# created. Apply once, out-of-band, during the ArgoCD install phase.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - app-project.yaml
+  - application.yaml

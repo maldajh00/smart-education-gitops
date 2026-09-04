@@ -1,0 +1,33 @@
+# GitOps BASE — self-contained.
+#
+# Every application manifest for the smart-education namespace is listed
+# below. Overlays layer environment-specific patches on top (image SHAs,
+# host names, replica counts, etc.).
+#
+# NOTE — no Secret is included here on purpose. `backend-secret` (consumed
+# by both the backend Deployment via envFrom and by Postgres via
+# secretKeyRef) is provisioned out-of-band by Vault. See ../../README.md
+# section 8. The Deployments will not start until that Secret exists.
+#
+# NOTE — no Ingress here yet. The Ingress + Google Managed Certificate
+# + FrontendConfig will be added in the dedicated Ingress/TLS phase to
+# avoid unintentionally creating a Google Cloud Load Balancer as soon as
+# ArgoCD begins reconciling this base.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - backend-serviceaccount.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - backend-hpa.yaml
+  - backend-pdb.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - frontend-hpa.yaml
+  - frontend-pdb.yaml
+  - migration-job.yaml
+  - network-policy.yaml
+  - postgres

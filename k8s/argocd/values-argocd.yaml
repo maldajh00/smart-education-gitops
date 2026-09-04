@@ -1,0 +1,92 @@
+# Helm values for the argo-cd chart (https://argoproj.github.io/argo-helm)
+#
+# Purpose: pin every ArgoCD component to the management node pool.
+#
+#   Nodes labeled `workload=management` carry the taint
+#   `workload=management:NoSchedule`, so we need BOTH a matching
+#   nodeSelector AND a matching toleration on every ArgoCD pod.
+#
+# NOTE: This file is not applied by ArgoCD itself — it feeds a `helm install`
+# / `helm upgrade` command performed out-of-band once (bootstrap), OR it can
+# be consumed by an ArgoCD `Application` of type Helm targeting the argo-cd
+# chart repo. That decision belongs to the ArgoCD-install phase, not this
+# preparation phase.
+#
+# Example bootstrap (do NOT run in this phase):
+#   helm repo add argo https://argoproj.github.io/argo-helm
+#   helm upgrade --install argocd argo/argo-cd \
+#     -n argocd --create-namespace \
+#     -f gitops/k8s/argocd/values-argocd.yaml
+global:
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule
+
+# Explicit per-component overrides in case the chart doesn't cascade
+# `global` to every subchart / template version.
+controller:
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule
+
+server:
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule
+
+repoServer:
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule
+
+applicationSet:
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule
+
+notifications:
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule
+
+dex:
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule
+
+redis:
+  nodeSelector:
+    workload: management
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: management
+      effect: NoSchedule

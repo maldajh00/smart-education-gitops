@@ -1,0 +1,73 @@
+# One-shot Job that runs alembic migrations (and optionally seed).
+# Run this once before rolling out a new backend release that changes schema.
+#
+#   kubectl apply -f k8s/migration-job.yaml
+#   kubectl -n smart-education wait --for=condition=complete job/backend-migrate --timeout=180s
+#   kubectl -n smart-education logs job/backend-migrate
+#   kubectl -n smart-education delete job backend-migrate   # cleanup
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: backend-migrate
+  namespace: smart-education
+  labels:
+    app.kubernetes.io/name: smart-education-backend
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: smart-education-portal
+  annotations:
+    # ArgoCD sync hook: run this Job before the app manifests are applied.
+    # BeforeHookCreation deletes the previous Job just before the new one
+    # starts so image/tag changes always run the matching migration.
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: smart-education-backend
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: app-service-account
+      automountServiceAccountToken: false
+      nodeSelector:
+        workload: application
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend:1.0.0
+          imagePullPolicy: IfNotPresent
+          # Bypass the entrypoint script; run alembic directly.
+          command: ["/usr/bin/tini", "--"]
+          args: ["sh", "-c", "alembic upgrade head && python -m app.seed"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: smart-education
+  labels:
+    app.kubernetes.io/name: smart-education-backend
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: smart-education-portal
+  # GKE Ingress with default (external) LB requires container-native LB via NEGs;
+  # keep the annotation with a ClusterIP so the LB backend service is health-checked
+  # against Pod IPs directly (skipping kube-proxy hops).
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: smart-education-backend
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

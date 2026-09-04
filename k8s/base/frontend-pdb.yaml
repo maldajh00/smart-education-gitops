@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: smart-education
+  labels:
+    app.kubernetes.io/name: smart-education-frontend
+    app.kubernetes.io/part-of: smart-education-portal
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: smart-education-frontend
+      app.kubernetes.io/component: web

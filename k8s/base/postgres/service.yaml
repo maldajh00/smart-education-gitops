@@ -1,0 +1,21 @@
+# Headless Service (clusterIP: None) — canonical pairing with a StatefulSet.
+# Name is `postgres` so the app's DATABASE_HOST=postgres resolves correctly.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: smart-education
+  labels:
+    app.kubernetes.io/name: smart-education-postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: smart-education-portal
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: smart-education-postgres
+    app.kubernetes.io/component: database
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP

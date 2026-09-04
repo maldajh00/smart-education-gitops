@@ -1,0 +1,42 @@
+# ArgoCD AppProject: smart-education
+#
+# Least-privilege boundary for the Smart Education Portal Application.
+# - Only the maldajh00/smart-education-gitops repo may be a source.
+# - Only the `smart-education` namespace on the local cluster may be a
+#   destination.
+# - Namespace is the only cluster-scoped kind allowed (the base creates
+#   the namespace itself). Everything else the app needs is namespaced.
+# - No AppProject roles are defined.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: smart-education
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Smart Education Portal — production project (least privilege)
+
+  sourceRepos:
+    - https://github.com/maldajh00/smart-education-gitops.git
+
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: smart-education
+
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+  clusterResourceBlacklist:
+    - group: "*"
+      kind: "*"
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  orphanedResources:
+    warn: true
+
+  roles: []

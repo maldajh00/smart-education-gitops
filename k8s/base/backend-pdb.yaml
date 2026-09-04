@@ -1,0 +1,16 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-pdb
+  namespace: smart-education
+  labels:
+    app.kubernetes.io/name: smart-education-backend
+    app.kubernetes.io/part-of: smart-education-portal
+# Deployment has replicas: 3 and HPA min: 2, so minAvailable: 1 always
+# leaves headroom for one voluntary disruption (node drain, upgrade).
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: smart-education-backend
+      app.kubernetes.io/component: api
