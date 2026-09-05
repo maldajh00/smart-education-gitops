@@ -1,19 +1,15 @@
 # GitOps OVERLAY: prod
 #
-# Production overlay. Layered on top of ../../base. Its ONLY job is to pin
-# each container image to an immutable Git SHA published by the app-repo
-# CI pipeline. A CI step in maldajh00/smart-education-assessment clones
-# this GitOps repository, runs (inside k8s/overlays/prod/):
+# Production overlay.
 #
-#   kustomize edit set image \
-#     me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend=me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend:${GIT_SHA}
-#   kustomize edit set image \
-#     me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend=me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend:${GIT_SHA}
+# Responsibilities:
+#   - Pin application images to immutable Git SHAs promoted by CI.
+#   - Configure production-only public ingress and TLS.
+#   - Keep production configuration separate from the reusable base.
 #
-# …and commits. ArgoCD detects the commit and reconciles.
+# CI updates the two image newTag values below after successfully building
+# and publishing an application commit. ArgoCD then reconciles this overlay.
 #
-# PLACEHOLDER_SHA is intentional. Never apply it as-is — CI replaces it
-# on the first pipeline run.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -21,12 +17,22 @@ namespace: smart-education
 
 resources:
   - ../../base
+  - ingress
 
 images:
   - name: me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend
     newTag: e6d5f4bc391551579d61ee28c3e86524f7d37c55
   - name: me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend
     newTag: e6d5f4bc391551579d61ee28c3e86524f7d37c55
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: backend-config
+    patch: |-
+      - op: replace
+        path: /data/CORS_ORIGINS
+        value: "https://smart-education.aldajh-software.com"
 
 commonLabels:
   environment: prod

@@ -1,0 +1,11 @@
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: smart-education-frontend-config
+  namespace: smart-education
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT

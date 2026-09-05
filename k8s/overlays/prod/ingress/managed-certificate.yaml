@@ -1,0 +1,10 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: smart-education-certificate
+  namespace: smart-education
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  domains:
+    - smart-education.aldajh-software.com

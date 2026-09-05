@@ -1,18 +1,16 @@
 # GitOps BASE — self-contained.
 #
-# Every application manifest for the smart-education namespace is listed
-# below. Overlays layer environment-specific patches on top (image SHAs,
-# host names, replica counts, etc.).
+# Every reusable application manifest for the smart-education namespace is
+# listed below. Environment-specific configuration belongs in overlays.
 #
-# NOTE — no Secret is included here on purpose. `backend-secret` (consumed
-# by both the backend Deployment via envFrom and by Postgres via
-# secretKeyRef) is provisioned out-of-band by Vault. See ../../README.md
-# section 8. The Deployments will not start until that Secret exists.
+# NOTE — no Secret is included here on purpose. `backend-secret` is
+# provisioned by Vault + External Secrets Operator and is consumed by the
+# backend and PostgreSQL workloads.
 #
-# NOTE — no Ingress here yet. The Ingress + Google Managed Certificate
-# + FrontendConfig will be added in the dedicated Ingress/TLS phase to
-# avoid unintentionally creating a Google Cloud Load Balancer as soon as
-# ArgoCD begins reconciling this base.
+# NOTE — public ingress and TLS are intentionally NOT part of the base.
+# Production ingress is defined under:
+#   overlays/prod/ingress/
+#
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -30,8 +28,6 @@ resources:
   - migration-job.yaml
   - network-policy.yaml
   - postgres
-  # Vault-integration lives inside the smart-education namespace: the
-  # external-secrets ServiceAccount, the ClusterSecretStore reference, and
-  # the ExternalSecret that materializes `backend-secret`. Ordered ahead of
-  # postgres/backend via ArgoCD sync waves so the Secret exists first.
+  # Vault-integration lives inside the smart-education namespace.
+  # The ExternalSecret materializes `backend-secret` from Vault.
   - external-secret
