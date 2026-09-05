@@ -1,1 +1,33 @@
-# GitOps OVERLAY: prod\n#\n# Production overlay. Layered on top of ../../base. Its ONLY job is to pin\n# each container image to an immutable Git SHA published by the app-repo\n# CI pipeline. A CI step in maldajh00/smart-education-assessment clones\n# this GitOps repository, runs (inside k8s/overlays/prod/):\n#\n#   kustomize edit set image \\n#     me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend=me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend:${GIT_SHA}\n#   kustomize edit set image \\n#     me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend=me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend:${GIT_SHA}\n#\n# …and commits. ArgoCD detects the commit and reconciles.\n#\n# PLACEHOLDER_SHA is intentional. Never apply it as-is — CI replaces it\n# on the first pipeline run.\napiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n\nnamespace: smart-education\n\nresources:\n  - ../../base\n\nimages:\n  - name: me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend\n    newTag: e6d5f4bc391551579d61ee28c3e86524f7d37c55\n  - name: me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend\n    newTag: e6d5f4bc391551579d61ee28c3e86524f7d37c55\n\ncommonLabels:\n  environment: prod\n  app.kubernetes.io/managed-by: argocd\n
+# GitOps OVERLAY: prod
+#
+# Production overlay. Layered on top of ../../base. Its ONLY job is to pin
+# each container image to an immutable Git SHA published by the app-repo
+# CI pipeline. A CI step in maldajh00/smart-education-assessment clones
+# this GitOps repository, runs (inside k8s/overlays/prod/):
+#
+#   kustomize edit set image \
+#     me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend=me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend:${GIT_SHA}
+#   kustomize edit set image \
+#     me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend=me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend:${GIT_SHA}
+#
+# …and commits. ArgoCD detects the commit and reconciles.
+#
+# PLACEHOLDER_SHA is intentional. Never apply it as-is — CI replaces it
+# on the first pipeline run.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: smart-education
+
+resources:
+  - ../../base
+
+images:
+  - name: me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend
+    newTag: e6d5f4bc391551579d61ee28c3e86524f7d37c55
+  - name: me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend
+    newTag: e6d5f4bc391551579d61ee28c3e86524f7d37c55
+
+commonLabels:
+  environment: prod
+  app.kubernetes.io/managed-by: argocd
