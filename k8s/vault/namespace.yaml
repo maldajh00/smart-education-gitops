@@ -6,10 +6,13 @@
 # init containers, or a future migration to raft storage.
 #
 # The smart-education namespace stays at PSA restricted regardless.
+
 apiVersion: v1
 kind: Namespace
 metadata:
   name: vault
+  annotations:
+    argocd.argoproj.io/sync-wave: "-40"
   labels:
     name: vault
     app.kubernetes.io/name: vault

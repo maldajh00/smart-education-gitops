@@ -11,14 +11,18 @@
 # - audit device is enabled at bootstrap (see scripts/bootstrap-vault.sh)
 #   rather than baked in, because Vault refuses to start if the audit
 #   destination is unreachable.
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vault-config
   namespace: vault
+  annotations:
+    argocd.argoproj.io/sync-wave: "-30"
   labels:
     app.kubernetes.io/name: vault
     app.kubernetes.io/component: server
+
 data:
   vault.hcl: |
     ui            = false

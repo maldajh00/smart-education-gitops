@@ -5,11 +5,14 @@
 #   so per-pod DNS (vault-0.vault-internal.vault.svc) resolves. Even
 #   with a single replica today, using a proper headless service now
 #   makes a future raft/HA migration a config-only change.
+
 apiVersion: v1
 kind: Service
 metadata:
   name: vault
   namespace: vault
+  annotations:
+    argocd.argoproj.io/sync-wave: "-30"
   labels:
     app.kubernetes.io/name: vault
     app.kubernetes.io/component: server
@@ -33,6 +36,8 @@ kind: Service
 metadata:
   name: vault-internal
   namespace: vault
+  annotations:
+    argocd.argoproj.io/sync-wave: "-30"
   labels:
     app.kubernetes.io/name: vault
     app.kubernetes.io/component: server-internal
