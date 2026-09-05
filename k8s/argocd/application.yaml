@@ -1,42 +1,52 @@
 # ArgoCD Application: smart-education-prod
 #
-# Desired state:  maldajh00/smart-education-gitops @ main : k8s/overlays/prod
-# Actual state:   the smart-education namespace on the local GKE cluster
+# Desired state:
+#   maldajh00/smart-education-gitops @ main
+#   path: k8s/overlays/prod
 #
-# ArgoCD continuously reconciles the two. On drift (manual kubectl edit),
-# selfHeal reverts the cluster to match git. On a git change (new image
-# SHA committed by app-repo CI), automated sync rolls it out.
+# ArgoCD manages the production Smart Education application.
+# The backend HPA owns Deployment.spec.replicas, so ArgoCD
+# ignores only that field for the backend Deployment.
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
+
 metadata:
   name: smart-education-prod
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
+
 spec:
   project: smart-education
 
   source:
     repoURL: https://github.com/maldajh00/smart-education-gitops.git
     targetRevision: main
-    # This path is relative to the GitOps repo root (this file already
-    # lives IN that repo, so no `gitops/` prefix).
     path: k8s/overlays/prod
 
   destination:
     server: https://kubernetes.default.svc
     namespace: smart-education
 
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: backend
+      namespace: smart-education
+      jsonPointers:
+        - /spec/replicas
+
   syncPolicy:
     automated:
-      prune: true       # remove resources deleted from git
-      selfHeal: true    # revert manual cluster drift
+      prune: true
+      selfHeal: true
       allowEmpty: false
 
     syncOptions:
       - ServerSideApply=true
       - PruneLast=true
-      - CreateNamespace=false     # base includes namespace.yaml
+      - CreateNamespace=false
       - RespectIgnoreDifferences=true
       - ApplyOutOfSyncOnly=true
 
