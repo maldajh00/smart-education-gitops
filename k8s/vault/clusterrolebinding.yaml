@@ -1,9 +1,3 @@
-# Minimal ClusterRoleBinding: grants ONLY `system:auth-delegator` to the
-# vault-auth-delegator SA. This is the single cluster-scoped permission
-# Vault needs to validate SA tokens via the Kubernetes TokenReview API
-# during auth/kubernetes login. It is NOT cluster-admin and does not
-# grant read/write on any resource.
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -19,5 +13,5 @@ roleRef:
   name: system:auth-delegator
 subjects:
   - kind: ServiceAccount
-    name: vault-auth-delegator
+    name: vault
     namespace: vault
