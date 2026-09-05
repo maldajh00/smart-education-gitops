@@ -8,7 +8,6 @@ metadata:
     kubernetes.io/ingress.global-static-ip-name: "smart-education-ip"
     networking.gke.io/managed-certificates: "smart-education-certificate"
     networking.gke.io/v1beta1.FrontendConfig: "smart-education-frontend-config"
-    argocd.argoproj.io/sync-wave: "20"
 spec:
   rules:
     - host: smart-education.aldajh-software.com
