@@ -85,6 +85,17 @@ spec:
       ports:
         - port: 8000
           protocol: TCP
+    # GKE Managed Service for Prometheus collectors live in the
+    # `gmp-system` namespace and scrape /metrics on the backend's
+    # named http port (8000). Without this rule the default-deny above
+    # blocks scrapes and no metrics reach Cloud Monitoring.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gmp-system
+      ports:
+        - port: 8000
+          protocol: TCP
   egress:
     - to:
         - podSelector:

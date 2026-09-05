@@ -31,3 +31,5 @@ resources:
   # Vault-integration lives inside the smart-education namespace.
   # The ExternalSecret materializes `backend-secret` from Vault.
   - external-secret
+  # PodMonitoring for GKE Managed Service for Prometheus.
+  - monitoring

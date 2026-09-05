@@ -1,0 +1,35 @@
+# GKE Managed Service for Prometheus scrape configuration for the backend.
+#
+# Managed collectors (google-managed-prometheus) run in the `gmp-system`
+# namespace and reconcile PodMonitoring resources across the cluster. This
+# object tells them to scrape /metrics on the backend pods' named "http"
+# port every 30s. The application exposes /metrics in-process on the same
+# port as the API; the public Ingress does NOT route /metrics.
+#
+# Cluster requirement: GKE Managed Service for Prometheus must be enabled
+# on prod-gke (it is, on the free-trial cluster). No self-hosted Prometheus
+# or kube-prometheus-stack is installed.
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: backend
+  namespace: smart-education
+  labels:
+    app.kubernetes.io/name: smart-education-backend
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: smart-education-portal
+spec:
+  # These labels are a strict SUBSET of the backend Deployment's pod labels
+  # (see k8s/base/backend-deployment.yaml). The prod overlay adds
+  # commonLabels (environment, managed-by) to the actual pods; a subset
+  # selector still matches because Kubernetes selector semantics only
+  # require the specified labels to be present on the target.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: smart-education-backend
+      app.kubernetes.io/component: api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      timeout: 10s
