@@ -30,6 +30,6 @@ spec:
       app.kubernetes.io/component: api
   endpoints:
     - port: http
-      path: /metrics
+      path: /metrics/
       interval: 30s
       timeout: 10s
