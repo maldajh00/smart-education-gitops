@@ -30,6 +30,8 @@ spec:
       labels:
         app.kubernetes.io/name: vault
         app.kubernetes.io/component: server
+      annotations:
+        smart-education.io/reconcile-reason: "vault-serviceaccount-ordering-fix"
     spec:
       serviceAccountName: vault
       automountServiceAccountToken: true
