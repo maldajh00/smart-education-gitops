@@ -1,17 +1,27 @@
-# NetworkPolicies here express the intended traffic model.
+# NetworkPolicies for the Smart Education production workload.
 #
-# IMPORTANT: NetworkPolicies require a network policy provider in the cluster
-# (e.g. Calico or GKE Dataplane V2). They are opt-in and empty policies deny
-# all traffic — TEST IN A NON-PROD CLUSTER FIRST before enforcing here.
+# IMPORTANT:
+# These policies require GKE NetworkPolicy enforcement to be enabled
+# at the cluster level before they become effective.
 #
-# Roll out sequence:
-#   1. Apply only "allow-frontend-to-backend" and "allow-backend-to-db"
-#      alongside the default-deny to a staging cluster.
-#   2. Verify /health, /ready, and UI still work.
-#   3. Then apply to production.
+# Traffic model:
+#   Internet / GKE LB -> Frontend
+#   Frontend          -> Backend:8000
+#   GCE health checks -> Backend:8000
+#   GMP collectors    -> Backend:8000
+#   Backend           -> PostgreSQL:5432
+#   Frontend/Backend/PostgreSQL -> Kubernetes DNS
+#   Backend           -> GKE metadata server:987/988
+#
+# Apply through GitOps/ArgoCD. Do not manually maintain live objects.
+# After changing these policies, validate with positive and negative
+# connectivity tests before declaring NetworkPolicy enforcement complete.
 ---
-# Default-deny for pods in the namespace: nothing goes in or out unless
-# explicitly allowed by another policy.
+
+# Default-deny for all pods in the smart-education namespace.
+#
+# Once GKE NetworkPolicy enforcement is enabled, pods will have no
+# ingress or egress unless another NetworkPolicy explicitly allows it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -19,10 +29,19 @@ metadata:
   namespace: smart-education
 spec:
   podSelector: {}
-  policyTypes: [Ingress, Egress]
+  policyTypes:
+    - Ingress
+    - Egress
+
 ---
-# Frontend pods: accept HTTP from anywhere in the cluster (the GKE LB reaches
-# them through kube-system/ingress-gce). Egress limited to backend + DNS.
+
+# Frontend pods:
+# - Accept HTTP ingress.
+# - Egress only to backend:8000 and Kubernetes DNS.
+#
+# The ingress is intentionally open because the GKE load balancer /
+# ingress health-check path does not originate from a predictable
+# namespace/pod selector.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -32,10 +51,16 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: smart-education-frontend
-  policyTypes: [Ingress, Egress]
+
+  policyTypes:
+    - Ingress
+    - Egress
+
   ingress:
-    - {}   # any source; the LB and health checks originate outside our labels
+    - {}
+
   egress:
+    # Frontend -> Backend
     - to:
         - podSelector:
             matchLabels:
@@ -43,6 +68,8 @@ spec:
       ports:
         - port: 8000
           protocol: TCP
+
+    # Frontend -> Kubernetes DNS
     - to:
         - namespaceSelector:
             matchLabels:
@@ -52,9 +79,15 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
+
 ---
-# Backend pods: accept traffic only from frontend pods (and the LB via the
-# ingress-gce component when path-routed to /api). Egress to Postgres + DNS.
+
+# Backend pods:
+# - Accept traffic from frontend pods.
+# - Accept GKE load-balancer health checks.
+# - Accept Managed Service for Prometheus scrapes.
+# - Egress only to PostgreSQL, Kubernetes DNS, and the GKE
+#   metadata server used by Workload Identity Federation for GKE.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -64,8 +97,13 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: smart-education-backend
-  policyTypes: [Ingress, Egress]
+
+  policyTypes:
+    - Ingress
+    - Egress
+
   ingress:
+    # Frontend -> Backend
     - from:
         - podSelector:
             matchLabels:
@@ -73,10 +111,11 @@ spec:
       ports:
         - port: 8000
           protocol: TCP
-    # GKE Ingress / container-native LB health checks originate from Google
-    # Front End ranges, NOT from any pod. Without these ipBlocks the LB will
-    # mark backends unhealthy the moment default-deny is enforced.
-    # Ref: https://cloud.google.com/load-balancing/docs/health-check-concepts#ip-ranges
+
+    # GKE Ingress / Google Cloud Load Balancer health checks.
+    #
+    # These Google Front End ranges must remain allowed so the
+    # load balancer can continue to mark the backend healthy.
     - from:
         - ipBlock:
             cidr: 35.191.0.0/16
@@ -85,10 +124,10 @@ spec:
       ports:
         - port: 8000
           protocol: TCP
-    # GKE Managed Service for Prometheus collectors live in the
-    # `gmp-system` namespace and scrape /metrics on the backend's
-    # named http port (8000). Without this rule the default-deny above
-    # blocks scrapes and no metrics reach Cloud Monitoring.
+
+    # Google Managed Service for Prometheus / GMP.
+    #
+    # Allows collectors in gmp-system to scrape /metrics.
     - from:
         - namespaceSelector:
             matchLabels:
@@ -96,7 +135,9 @@ spec:
       ports:
         - port: 8000
           protocol: TCP
+
   egress:
+    # Backend -> PostgreSQL
     - to:
         - podSelector:
             matchLabels:
@@ -104,6 +145,8 @@ spec:
       ports:
         - port: 5432
           protocol: TCP
+
+    # Backend -> Kubernetes DNS
     - to:
         - namespaceSelector:
             matchLabels:
@@ -113,11 +156,30 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
-    # When you switch to Cloud SQL via Private IP, add an egress rule for the
-    # VPC CIDR that Cloud SQL uses instead of the pod selector above.
+
+    # Backend -> GKE metadata server.
+    #
+    # The application node pool uses GKE_METADATA and the cluster
+    # uses Workload Identity Federation for GKE.
+    #
+    # Both documented metadata-server ports are explicitly allowed.
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.252/32
+      ports:
+        - port: 988
+          protocol: TCP
+        - port: 987
+          protocol: TCP
+
+    # If PostgreSQL is later migrated to Cloud SQL over Private IP,
+    # replace/add the appropriate VPC CIDR egress rule here.
+
 ---
-# Postgres pods: accept 5432 only from backend + migration Job (both share
-# the smart-education-backend name label). Egress limited to DNS.
+
+# PostgreSQL pods:
+# - Accept PostgreSQL traffic only from backend pods.
+# - Egress only to Kubernetes DNS.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -127,8 +189,16 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: smart-education-postgres
-  policyTypes: [Ingress, Egress]
+
+  policyTypes:
+    - Ingress
+    - Egress
+
   ingress:
+    # Backend -> PostgreSQL
+    #
+    # This also covers the backend migration Job because it uses
+    # the same backend application label.
     - from:
         - podSelector:
             matchLabels:
@@ -136,7 +206,9 @@ spec:
       ports:
         - port: 5432
           protocol: TCP
+
   egress:
+    # PostgreSQL -> Kubernetes DNS
     - to:
         - namespaceSelector:
             matchLabels:
