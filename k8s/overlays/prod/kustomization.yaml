@@ -21,9 +21,9 @@ resources:
 
 images:
   - name: me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-backend
-    newTag: b97b2b571b743d401b61ec3d0e6160fe4ef4a289
+    newTag: ea089a43705df6d5c2eda1a23a2111153bfb59d4
   - name: me-central1-docker.pkg.dev/smart-education-assignment/prod-gke-repo/smart-education-frontend
-    newTag: b97b2b571b743d401b61ec3d0e6160fe4ef4a289
+    newTag: ea089a43705df6d5c2eda1a23a2111153bfb59d4
 
 patches:
   - target:
