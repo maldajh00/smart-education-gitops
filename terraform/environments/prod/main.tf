@@ -78,3 +78,15 @@ module "ci_identity" {
   project_id        = var.project_id
   github_repository = "maldajh00/smart-education-assessment"
 }
+
+# This repo's (smart-education-gitops) own Terraform CI identity — a
+# separate provider on the same pool, and separate plan/apply service
+# accounts from the app repo's image-push identity above.
+module "terraform_ci_identity" {
+  source = "../../modules/terraform-ci-identity"
+
+  project_id        = var.project_id
+  pool_id           = module.ci_identity.pool_id
+  pool_name         = module.ci_identity.pool_name
+  github_repository = "maldajh00/smart-education-gitops"
+}

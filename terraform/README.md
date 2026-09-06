@@ -5,12 +5,13 @@ provisioned for the Smart Education assessment (project
 `smart-education-assignment`, region `me-central1`): the VPC/subnet/
 Cloud NAT, the `prod-gke` GKE cluster and its two node pools, the
 `prod-gke-repo` Artifact Registry repository, and the GitHub Actions
-Workload Identity Federation setup used by the application repo's CI.
+Workload Identity Federation setup used by both this repo's own
+Terraform CI and the application repo's image-build CI.
 
 It was written to **match already-running infrastructure**, then
 verified against the real cluster with `terraform import` + `terraform
-plan` (not written first and applied blind). See §Verification below for
-exactly how, and what had to be corrected along the way.
+plan` (not written first and applied blind). See §6 below for exactly
+how, and what had to be corrected along the way.
 
 ## 1. Structure
 
@@ -23,10 +24,11 @@ terraform/
 │     needs its own main.tf + backend.tf, not a re-declaration of
 │     provider requirements.
 ├── modules/
-│   ├── network/            VPC, subnet, Cloud Router, Cloud NAT
-│   ├── gke/                GKE cluster + management/application node pools
-│   ├── artifact-registry/  Docker repo + repo-scoped IAM
-│   └── ci-identity/        WIF pool/provider + GitHub Actions GSA
+│   ├── network/                VPC, subnet, Cloud Router, Cloud NAT
+│   ├── gke/                    GKE cluster + management/application node pools
+│   ├── artifact-registry/      Docker repo + repo-scoped IAM
+│   ├── ci-identity/            WIF pool + provider + GSA for the app repo's image CI
+│   └── terraform-ci-identity/  A second WIF provider (same pool) + plan/apply GSAs for THIS repo's own Terraform CI
 ├── environments/
 │   └── prod/               The only root module actually `init`/`plan`/`apply`'d.
 │       ├── main.tf, outputs.tf, backend.tf, terraform.tfvars.example
@@ -58,11 +60,11 @@ terraform plan
 ```
 
 A plan against the current infrastructure should show **No changes**
-(that's the state this repo ships in — see §Verification). If it
-doesn't, something in the real infrastructure moved since this was last
-verified; investigate the diff before applying, and never apply a plan
-that wants to destroy or replace `prod-gke`, its node pools, the VPC, or
-the subnet.
+(that's the state this repo ships in — see §6). If it doesn't, something
+in the real infrastructure moved since this was last verified;
+investigate the diff before applying, and never apply a plan that wants
+to destroy or replace `prod-gke`, its node pools, the VPC, or the
+subnet.
 
 ## 4. What's deliberately NOT in Terraform
 
@@ -87,83 +89,52 @@ the subnet.
 ## 5. CI: automated plan/apply (`.github/workflows/terraform.yaml`)
 
 - **Every PR touching `terraform/**`**: `fmt -check` + `validate` (no
-  cloud credentials), then `plan` using a **read-only** identity,
-  posted as a PR comment.
-- **Push to `main` touching `terraform/**`**: `apply`, gated behind the
-  GitHub Environment `terraform-prod`. Set that Environment's required
-  reviewers in *Settings → Environments* — the workflow file can request
-  the gate but can't create the protection rule itself.
-- Both jobs authenticate via **Workload Identity Federation** (`google-
-  github-actions/auth`) — no service-account JSON key anywhere.
+  cloud credentials), then `plan` using the **read-only** `terraform-
+  plan-gsa` identity, posted as a PR comment.
+- **Push to `main` touching `terraform/**`**: `apply`, using the more-
+  privileged `terraform-apply-gsa` identity, gated behind the GitHub
+  Environment `terraform-prod`.
+- Both authenticate via **Workload Identity Federation**
+  (`google-github-actions/auth`) — no service-account JSON key
+  anywhere — using the `terraform-ci-identity` module's WIF provider
+  (`gitops-provider`, on the same pool the app repo's CI uses, but its
+  own provider with its own `attribute_condition` scoped to
+  `maldajh00/smart-education-gitops` only).
 
-### One-time setup this workflow needs (not yet provisioned)
+### Identity setup — done, provisioned via Terraform itself
 
-The `ci-identity` module's WIF provider is scoped, by
-`attribute_condition`, to exactly one repo:
-`maldajh00/smart-education-assessment` (the application repo, which
-pushes images). **This** repo (`smart-education-gitops`) needs its own
-WIF provider and its own service account(s) before `terraform.yaml` can
-run — reusing `github-actions-gsa` would violate least privilege, since
-that identity is deliberately scoped to nothing but
-`roles/artifactregistry.writer` on one repository.
+Unlike the app repo's `ci-identity` (one GSA scoped to
+`roles/artifactregistry.writer` on one repository — nowhere near enough
+for managing a VPC, a GKE cluster, IAM, or WIF itself), this repo's own
+Terraform CI needs meaningfully broader permissions to do its job. Origin
+of that gap is `modules/terraform-ci-identity`, applied this session
+(see `main.tf`'s `module "terraform_ci_identity"` block):
 
-Deliberately not auto-created by this session: granting a CI identity
-project-level `roles/container.admin` /
-`roles/compute.networkAdmin` / `roles/artifactregistry.admin` /
-`roles/iam.serviceAccountAdmin` (needed for the `apply` identity to
-actually manage these resources) is a meaningfully bigger, more
-sensitive grant than anything else in this repo, and this session
-already caused one real (quickly-reverted) production lockout by
-under-scoping a `master_authorized_networks_config` block — see the
-comment in `modules/gke/main.tf`. That's exactly the kind of change a
-human should knowingly approve, not something to provision silently.
+- **`terraform-plan-gsa`**: `roles/viewer` only.
+- **`terraform-apply-gsa`**: `roles/compute.networkAdmin`,
+  `roles/container.admin`, `roles/artifactregistry.admin`,
+  `roles/iam.serviceAccountAdmin`, `roles/iam.workloadIdentityPoolAdmin`
+  — the specific resource types this config manages, not
+  Editor/Owner.
+- Both are restricted to impersonation from this one repo only, via the
+  WIF provider's `attribute_condition`.
 
-To wire it up:
+Repository variables `TF_WORKLOAD_IDENTITY_PROVIDER`,
+`TF_PLAN_SERVICE_ACCOUNT`, `TF_APPLY_SERVICE_ACCOUNT` are set (Settings →
+Secrets and variables → Actions → Variables — these aren't secrets, so
+they're variables, not secrets). The `terraform-prod` GitHub Environment
+exists.
 
-```bash
-# 1. A second WIF provider, scoped to this repo (reuse the existing pool):
-gcloud iam workload-identity-pools providers create-oidc gitops-provider \
-  --location=global \
-  --workload-identity-pool=github-actions-pool \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
-  --attribute-condition="assertion.repository == 'maldajh00/smart-education-gitops'"
-
-# 2. Two GSAs — plan (read-only) and apply (the roles Terraform actually needs):
-gcloud iam service-accounts create terraform-plan-gsa \
-  --display-name="Terraform plan (read-only)"
-gcloud iam service-accounts create terraform-apply-gsa \
-  --display-name="Terraform apply"
-
-# roles/viewer is enough for `plan` to read every resource type here.
-gcloud projects add-iam-policy-binding smart-education-assignment \
-  --member="serviceAccount:terraform-plan-gsa@smart-education-assignment.iam.gserviceaccount.com" \
-  --role="roles/viewer"
-
-# `apply` needs to create/update the specific resource types this repo
-# manages — grant these four, not Editor/Owner:
-for role in roles/compute.networkAdmin roles/container.admin \
-            roles/artifactregistry.admin roles/iam.serviceAccountAdmin; do
-  gcloud projects add-iam-policy-binding smart-education-assignment \
-    --member="serviceAccount:terraform-apply-gsa@smart-education-assignment.iam.gserviceaccount.com" \
-    --role="$role"
-done
-
-# 3. Let each GSA be impersonated only via the gitops repo's WIF provider:
-for sa in terraform-plan-gsa terraform-apply-gsa; do
-  gcloud iam service-accounts add-iam-policy-binding \
-    "${sa}@smart-education-assignment.iam.gserviceaccount.com" \
-    --role="roles/iam.workloadIdentityUser" \
-    --member="principalSet://iam.googleapis.com/projects/940549323188/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/maldajh00/smart-education-gitops"
-done
-```
-
-Then set these as repository **variables** (Settings → Secrets and
-variables → Actions → Variables — not secrets, these aren't sensitive):
-`TF_WORKLOAD_IDENTITY_PROVIDER` (the gitops-provider resource name from
-step 1), `TF_PLAN_SERVICE_ACCOUNT`, `TF_APPLY_SERVICE_ACCOUNT`. Finally,
-create the `terraform-prod` Environment with at least one required
-reviewer.
+**Not done, and left for a human:** the `terraform-prod` Environment has
+no required-reviewer protection rule yet — GitHub's API rejected adding
+one (`"Please ensure the billing plan supports the required reviewers
+protection rule"` — this repo is private, and that specific protection
+rule needs a paid GitHub plan for private repos). Add it manually once
+the plan supports it (Settings → Environments → terraform-prod →
+required reviewers), or make the repo public if that's acceptable. Until
+then, `apply` runs unattended on every push to `main` that touches
+`terraform/**` — treat that as a real gap, not a formality, given what
+`terraform-apply-gsa` can do.
 
 ## 6. Verification performed this session
 
@@ -173,9 +144,10 @@ reviewer.
    queries against the live project — this is what the module arguments
    above are drawn from, not assumption.
 2. `terraform init` against the real GCS backend, then `terraform
-   import` for all 12 resources (network, subnet, router, NAT, cluster,
-   both node pools, the Artifact Registry repo + its IAM binding, the
-   WIF pool + provider, the GSA + its IAM binding).
+   import` for all 12 core-infrastructure resources (network, subnet,
+   router, NAT, cluster, both node pools, the Artifact Registry repo +
+   its IAM binding, the app-CI WIF pool + provider, the app-CI GSA + its
+   IAM binding).
 3. `terraform plan` iterated to a clean **`No changes.`** — including
    catching and fixing:
    - `initial_node_count` forcing full cluster **replacement** (this
@@ -210,3 +182,9 @@ reviewer.
    have — each confirmed via `gcloud describe` beforehand to already
    match, so applying only made Terraform's state match reality, not
    change reality.
+5. `terraform-ci-identity` (WIF provider, two GSAs, their WIF bindings,
+   and six project IAM role grants) applied cleanly in two passes — the
+   first `google_project_iam_member` grants failed with
+   `cloudresourcemanager.googleapis.com` disabled (enabled it — a free
+   API activation, not a billing change — and retried after propagation
+   delay). Final `terraform plan`: **`No changes.`**
