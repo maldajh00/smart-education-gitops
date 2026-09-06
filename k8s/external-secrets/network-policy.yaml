@@ -1,12 +1,9 @@
-# Network isolation for ESO.
+# Network isolation for External Secrets Operator.
 #
-# - default-deny for the external-secrets namespace.
-# - allow the ESO controller to reach Vault on 8200, the Kubernetes API
-#   on 443, and DNS.
-# - allow the ESO webhook service ingress from the Kubernetes API server
-#   (needed for admission review). On GKE the API server is
-#   out-of-cluster, so this is a permissive 0.0.0.0/0 :10250 style rule
-#   — narrowed to the webhook port (9443 by default).
+# - Default deny for the external-secrets namespace.
+# - ESO controller can reach DNS, Vault, and the Kubernetes API.
+# - ESO cert-controller can reach DNS and the Kubernetes API.
+# - ESO webhook accepts admission traffic on its actual webhook port (10250).
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -15,7 +12,9 @@ metadata:
   namespace: external-secrets
 spec:
   podSelector: {}
-  policyTypes: [Ingress, Egress]
+  policyTypes:
+    - Ingress
+    - Egress
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -26,7 +25,8 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: external-secrets
-  policyTypes: [Egress]
+  policyTypes:
+    - Egress
   egress:
     # DNS
     - to:
@@ -38,6 +38,7 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
+
     # Vault
     - to:
         - namespaceSelector:
@@ -49,19 +50,47 @@ spec:
       ports:
         - port: 8200
           protocol: TCP
-    # Kubernetes API server (SA login + ExternalSecret writes)
+
+    # Kubernetes API server
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
+            cidr: 34.118.224.1/32
       ports:
         - port: 443
           protocol: TCP
 ---
-# Webhook: admission traffic from the API server.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-eso-cert-controller-egress
+  namespace: external-secrets
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: external-secrets-cert-controller
+  policyTypes:
+    - Egress
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+    # Kubernetes API server
+    - to:
+        - ipBlock:
+            cidr: 34.118.224.1/32
+      ports:
+        - port: 443
+          protocol: TCP
+---
+# Webhook: admission traffic from the Kubernetes API server.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -71,11 +100,12 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: external-secrets-webhook
-  policyTypes: [Ingress]
+  policyTypes:
+    - Ingress
   ingress:
     - from:
         - ipBlock:
             cidr: 0.0.0.0/0
       ports:
-        - port: 9443
+        - port: 10250
           protocol: TCP
