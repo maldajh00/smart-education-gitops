@@ -1,7 +1,13 @@
 # ArgoCD Application: smart-education-vault
 #
-# Syncs the Vault infrastructure bundle from k8s/vault/. Does NOT create
-# any Vault credentials; those come from the manual bootstrap script.
+# Multi-source: syncs the Vault infrastructure bundle from k8s/vault/
+# (StatefulSet, Service, PDB, RBAC — commonLabels kept there because
+# those selectors are immutable and already live with the labels it
+# produces) plus the vault namespace's NetworkPolicies from the
+# independent k8s/vault-network-policy/ kustomize root (see that
+# directory's network-policy.yaml for why it's built separately).
+# Does NOT create any Vault credentials; those come from the manual
+# bootstrap script.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -12,10 +18,13 @@ metadata:
 spec:
   project: smart-education-infra
 
-  source:
-    repoURL: https://github.com/maldajh00/smart-education-gitops.git
-    targetRevision: main
-    path: k8s/vault
+  sources:
+    - repoURL: https://github.com/maldajh00/smart-education-gitops.git
+      targetRevision: main
+      path: k8s/vault
+    - repoURL: https://github.com/maldajh00/smart-education-gitops.git
+      targetRevision: main
+      path: k8s/vault-network-policy
 
   destination:
     server: https://kubernetes.default.svc

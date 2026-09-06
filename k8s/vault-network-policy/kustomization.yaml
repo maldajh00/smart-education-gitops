@@ -1,0 +1,16 @@
+# Standalone kustomize root (deliberately NOT nested under k8s/vault) so
+# `labels` + includeSelectors: false can be used without any ancestor
+# commonLabels transformer re-injecting into these NetworkPolicies'
+# selectors. See network-policy.yaml for the full explanation. Wired in
+# as a second source of the smart-education-vault ArgoCD Application.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - network-policy.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: smart-education-platform
+      app.kubernetes.io/managed-by: argocd
+    includeSelectors: false

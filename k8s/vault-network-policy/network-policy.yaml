@@ -9,6 +9,29 @@
 #
 # Application pods (backend/frontend/postgres) intentionally have NO path
 # to Vault — the backend never authenticates to Vault directly.
+#
+# WHY THIS LIVES IN ITS OWN DIRECTORY/SOURCE INSTEAD OF k8s/vault:
+# k8s/vault's kustomization uses the legacy `commonLabels` transformer,
+# kept there because the StatefulSet/PodDisruptionBudget spec.selector
+# fields are immutable post-creation and already live with the labels
+# commonLabels produces — migrating to `labels`/includeSelectors:false
+# would change those selectors and be rejected by the API server.
+# commonLabels has no per-field opt-out and no way to be shielded by
+# nesting (it re-merges its keys into every matchLabels block in the
+# FINAL aggregated resource list, after patches run, regardless of which
+# nested kustomization a resource came from). The
+# allow-vault-ingress-eso "from" selector below describes the ESO
+# controller pod in the external-secrets namespace — a Helm-managed pod
+# (chart external-secrets) that only ever carries
+# app.kubernetes.io/name, never part-of or managed-by=argocd — so if
+# built inside k8s/vault, the selector would be padded with labels the
+# real pod doesn't have and would never match it. Building these
+# NetworkPolicies from a separate kustomize root (see
+# ./kustomization.yaml, which uses `labels` + includeSelectors: false)
+# keeps every selector exactly as written below while still labeling
+# metadata for tracking. This directory is wired into the
+# smart-education-vault ArgoCD Application as a second source
+# (k8s/argocd/vault-application.yaml).
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
