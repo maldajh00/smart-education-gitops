@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (gitignored) and adjust if needed.
+# Every value here already has the correct default in the shared
+# variables.tf for this specific project, so an empty terraform.tfvars
+# works too — this file exists to make the inputs explicit and
+# reviewable.
+
+project_id  = "smart-education-assignment"
+region      = "me-central1"
+environment = "prod"

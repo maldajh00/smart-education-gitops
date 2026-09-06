@@ -1,0 +1,17 @@
+# The .terraform.lock.hcl provider lock file IS committed (pins exact
+# provider versions for reproducibility) — only the downloaded provider
+# binaries and any local state are ignored.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+**/terraform.tfvars
+!**/terraform.tfvars.example
