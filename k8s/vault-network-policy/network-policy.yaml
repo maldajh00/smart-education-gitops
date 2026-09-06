@@ -5,7 +5,10 @@
 # - allow-vault-ingress-eso: only pods labeled ESO controller in the
 #   external-secrets namespace may reach Vault on 8200.
 # - allow-vault-egress: Vault needs the Kubernetes API (TokenReview
-#   during auth/kubernetes login) and DNS.
+#   during auth/kubernetes login) and DNS — Vault's own auth config uses
+#   the hostname "kubernetes.default.svc", so it dials DNS before it can
+#   dial the API. See the two rules' comments below for the specific
+#   addresses required (confirmed via live connectivity testing).
 #
 # Application pods (backend/frontend/postgres) intentionally have NO path
 # to Vault — the backend never authenticates to Vault directly.
@@ -80,7 +83,7 @@ spec:
       app.kubernetes.io/component: server
   policyTypes: [Egress]
   egress:
-    # DNS
+    # DNS: kube-system pods (direct pod-to-pod resolution path)
     - to:
         - namespaceSelector:
             matchLabels:
@@ -90,16 +93,32 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
-    # Kubernetes API (TokenReview). On GKE the control plane is
-    # out-of-cluster; a namespaceSelector cannot match it. Allow 443 to
-    # any destination for the Vault SA to reach kubernetes.default.svc.
+    # DNS: NodeLocal DNSCache. Its Corefile shows
+    # `bind 169.254.20.10 34.118.224.10` — it binds directly to both
+    # addresses on its own node-local interface, no DNAT involved, so a
+    # pod's resolv.conf query to the literal kube-dns ClusterIP
+    # (34.118.224.10) needs its own rule same as the node-local address.
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
+            cidr: 169.254.20.10/32
+        - ipBlock:
+            cidr: 34.118.224.10/32
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Kubernetes API (TokenReview during auth/kubernetes login). The
+    # "kubernetes" Service (34.118.224.1) has no pod backend; its
+    # Endpoints object resolves to the real private control-plane
+    # address (currently 10.10.0.2). kube-proxy DNATs to that real
+    # address before Calico evaluates the policy, so the rule must
+    # target it directly rather than the ClusterIP or a broad
+    # except-private-ranges block (which would exclude it, since
+    # 10.10.0.2 falls inside 10.0.0.0/8).
+    - to:
+        - ipBlock:
+            cidr: 10.10.0.2/32
       ports:
         - port: 443
           protocol: TCP
