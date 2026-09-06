@@ -19,9 +19,6 @@
 ---
 
 # Default-deny for all pods in the smart-education namespace.
-#
-# Once GKE NetworkPolicy enforcement is enabled, pods will have no
-# ingress or egress unless another NetworkPolicy explicitly allows it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -38,10 +35,6 @@ spec:
 # Frontend pods:
 # - Accept HTTP ingress.
 # - Egress only to backend:8000 and Kubernetes DNS.
-#
-# The ingress is intentionally open because the GKE load balancer /
-# ingress health-check path does not originate from a predictable
-# namespace/pod selector.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -74,6 +67,12 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+        # GKE NodeLocal DNS Cache
+        - ipBlock:
+            cidr: 169.254.20.10/32
+        # Kubernetes DNS Service VIP used by pod resolv.conf
+        - ipBlock:
+            cidr: 34.118.224.10/32
       ports:
         - port: 53
           protocol: UDP
@@ -113,9 +112,6 @@ spec:
           protocol: TCP
 
     # GKE Ingress / Google Cloud Load Balancer health checks.
-    #
-    # These Google Front End ranges must remain allowed so the
-    # load balancer can continue to mark the backend healthy.
     - from:
         - ipBlock:
             cidr: 35.191.0.0/16
@@ -126,8 +122,6 @@ spec:
           protocol: TCP
 
     # Google Managed Service for Prometheus / GMP.
-    #
-    # Allows collectors in gmp-system to scrape /metrics.
     - from:
         - namespaceSelector:
             matchLabels:
@@ -151,6 +145,12 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+        # GKE NodeLocal DNS Cache
+        - ipBlock:
+            cidr: 169.254.20.10/32
+        # Kubernetes DNS Service VIP used by pod resolv.conf
+        - ipBlock:
+            cidr: 34.118.224.10/32
       ports:
         - port: 53
           protocol: UDP
@@ -158,11 +158,6 @@ spec:
           protocol: TCP
 
     # Backend -> GKE metadata server.
-    #
-    # The application node pool uses GKE_METADATA and the cluster
-    # uses Workload Identity Federation for GKE.
-    #
-    # Both documented metadata-server ports are explicitly allowed.
     - to:
         - ipBlock:
             cidr: 169.254.169.252/32
@@ -171,9 +166,6 @@ spec:
           protocol: TCP
         - port: 987
           protocol: TCP
-
-    # If PostgreSQL is later migrated to Cloud SQL over Private IP,
-    # replace/add the appropriate VPC CIDR egress rule here.
 
 ---
 
@@ -196,9 +188,6 @@ spec:
 
   ingress:
     # Backend -> PostgreSQL
-    #
-    # This also covers the backend migration Job because it uses
-    # the same backend application label.
     - from:
         - podSelector:
             matchLabels:
@@ -213,6 +202,12 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+        # GKE NodeLocal DNS Cache
+        - ipBlock:
+            cidr: 169.254.20.10/32
+        # Kubernetes DNS Service VIP used by pod resolv.conf
+        - ipBlock:
+            cidr: 34.118.224.10/32
       ports:
         - port: 53
           protocol: UDP
