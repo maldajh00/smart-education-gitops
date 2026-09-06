@@ -43,3 +43,15 @@ variable "apply_roles" {
     "roles/iam.workloadIdentityPoolAdmin",
   ]
 }
+
+variable "state_bucket_name" {
+  description = <<-EOT
+    The GCS bucket backing environments/prod's remote state (created by
+    terraform/bootstrap, not this module). Both CI identities need
+    bucket-scoped access to it — a separate grant from apply_roles,
+    since GCS backend access isn't covered by any project-level
+    compute/container/registry/IAM role.
+  EOT
+  type        = string
+  default     = "smart-education-assignment-tfstate"
+}

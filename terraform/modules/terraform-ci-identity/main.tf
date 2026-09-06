@@ -45,6 +45,15 @@ resource "google_project_iam_member" "plan_viewer" {
   member  = "serviceAccount:${google_service_account.plan.email}"
 }
 
+# roles/viewer does not cover the GCS backend's own object read/list
+# calls — `terraform init`/`plan` need this bucket-scoped grant
+# regardless.
+resource "google_storage_bucket_iam_member" "plan_state_read" {
+  bucket = var.state_bucket_name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.plan.email}"
+}
+
 # ---------------------------------------------------------------------
 # Apply: only runs behind the terraform-prod GitHub Environment's
 # required-reviewer gate (see .github/workflows/terraform.yaml). Granted
@@ -69,4 +78,13 @@ resource "google_project_iam_member" "apply_roles" {
   project = var.project_id
   role    = each.value
   member  = "serviceAccount:${google_service_account.apply.email}"
+}
+
+# apply needs to read AND write state objects (including the lock
+# object) — objectAdmin, scoped to just this bucket, not project-wide
+# storage access.
+resource "google_storage_bucket_iam_member" "apply_state_readwrite" {
+  bucket = var.state_bucket_name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.apply.email}"
 }
