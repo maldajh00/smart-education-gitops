@@ -4,6 +4,24 @@
 # - ESO controller can reach DNS, Vault, and the Kubernetes API.
 # - ESO cert-controller can reach DNS and the Kubernetes API.
 # - ESO webhook accepts admission traffic on its actual container port 10250.
+#
+# IMPORTANT: Calico enforces NetworkPolicy against the POST-DNAT (real)
+# destination of a packet, not the virtual Kubernetes Service ClusterIP a
+# pod's resolv.conf/client actually dials. Two consequences drove the
+# ipBlock choices below (confirmed via live connectivity testing):
+#
+#   - The "kubernetes" Service (34.118.224.1) has no pod backend; its
+#     Endpoints object resolves to the real private control-plane address
+#     (currently 10.10.0.2). A rule written against the ClusterIP itself
+#     never matches post-DNAT traffic and silently drops it.
+#   - Cluster DNS (kube-dns ClusterIP 34.118.224.10) is transparently
+#     intercepted by the NodeLocal DNSCache addon and redirected to its
+#     node-local address (169.254.20.10), which isn't a normal pod IP a
+#     namespaceSelector/podSelector can match.
+#
+# The Vault rule below is unaffected: it already targets Vault's real pod
+# labels/namespace rather than its Service ClusterIP, which is exactly
+# what post-DNAT enforcement requires.
 
 ---
 apiVersion: networking.k8s.io/v1
@@ -31,7 +49,7 @@ spec:
     - Egress
   egress:
 
-    # DNS
+    # DNS: kube-system pods (direct pod-to-pod resolution path)
     - to:
         - namespaceSelector:
             matchLabels:
@@ -42,7 +60,20 @@ spec:
         - port: 53
           protocol: TCP
 
-    # HashiCorp Vault
+    # DNS: NodeLocal DNSCache node-local address. Traffic to the kube-dns
+    # ClusterIP is transparently redirected here before Calico evaluates
+    # the policy, so this ipBlock is required even though pods never dial
+    # this address directly.
+    - to:
+        - ipBlock:
+            cidr: 169.254.20.10/32
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+    # HashiCorp Vault (targets real Vault pod labels, not a Service ClusterIP)
     - to:
         - namespaceSelector:
             matchLabels:
@@ -54,10 +85,12 @@ spec:
         - port: 8200
           protocol: TCP
 
-    # Kubernetes API Service
+    # Kubernetes API server. The "kubernetes" Service has no pod backend,
+    # so the real (post-DNAT) destination is its Endpoints address, not
+    # the 34.118.224.1 ClusterIP.
     - to:
         - ipBlock:
-            cidr: 34.118.224.1/32
+            cidr: 10.10.0.2/32
       ports:
         - port: 443
           protocol: TCP
@@ -76,7 +109,7 @@ spec:
     - Egress
   egress:
 
-    # DNS
+    # DNS: kube-system pods (direct pod-to-pod resolution path)
     - to:
         - namespaceSelector:
             matchLabels:
@@ -87,10 +120,20 @@ spec:
         - port: 53
           protocol: TCP
 
-    # Kubernetes API Service
+    # DNS: NodeLocal DNSCache node-local address (see comment above)
     - to:
         - ipBlock:
-            cidr: 34.118.224.1/32
+            cidr: 169.254.20.10/32
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+    # Kubernetes API server (see comment above)
+    - to:
+        - ipBlock:
+            cidr: 10.10.0.2/32
       ports:
         - port: 443
           protocol: TCP
