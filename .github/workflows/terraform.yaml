@@ -1,0 +1,142 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths: ["terraform/**"]
+  push:
+    branches: ["main"]
+    paths: ["terraform/**"]
+
+concurrency:
+  group: terraform-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+env:
+  TF_DIR: terraform/environments/prod
+  TF_VERSION: "1.9.8"
+
+jobs:
+
+  # ============================================================
+  # fmt + validate: run on every PR and push, no cloud credentials
+  # needed. Fails fast on style/syntax problems before anything
+  # touches GCP.
+  # ============================================================
+  fmt-validate:
+    name: terraform fmt + validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive terraform
+
+      - name: terraform init (no backend, validate only)
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform validate
+
+  # ============================================================
+  # plan: runs on PRs against terraform/**, using a read-only
+  # identity. Posts the plan as a PR comment for review — never
+  # applies.
+  # ============================================================
+  plan:
+    name: terraform plan
+    runs-on: ubuntu-latest
+    needs: fmt-validate
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.TF_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.TF_PLAN_SERVICE_ACCOUNT }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
+      - name: terraform plan
+        id: plan
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform plan -no-color -input=false 2>&1 | tee /tmp/plan.txt
+        continue-on-error: true
+
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('/tmp/plan.txt', 'utf8').slice(-60000);
+            const body = `#### Terraform Plan (\`${{ env.TF_DIR }}\`)\n\`\`\`\n${plan}\n\`\`\``;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: Fail if plan errored
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  # ============================================================
+  # apply: runs only on push to main, and only after a required
+  # reviewer approves the `terraform-prod` GitHub Environment (set
+  # that protection rule up in repo Settings → Environments — this
+  # workflow file alone can't create it). Separate, more privileged
+  # identity than plan's.
+  # ============================================================
+  apply:
+    name: terraform apply
+    runs-on: ubuntu-latest
+    needs: fmt-validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: terraform-prod
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.TF_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.TF_APPLY_SERVICE_ACCOUNT }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
+      - name: terraform plan
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform plan -no-color -input=false -out=tfplan
+
+      - name: terraform apply
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform apply -input=false -auto-approve tfplan
