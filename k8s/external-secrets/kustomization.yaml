@@ -10,6 +10,15 @@ resources:
   - namespace.yaml
   - network-policy.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: smart-education-platform
-  app.kubernetes.io/managed-by: argocd
+# NOTE: `labels` (not the legacy `commonLabels`) with includeSelectors: false.
+# commonLabels injects into every matchLabels/selector field it can find,
+# including NetworkPolicy podSelector. The ESO controller/cert-controller/
+# webhook Deployments are Helm-managed and only carry Helm's own labels
+# (app.kubernetes.io/managed-by=Helm, no part-of), so a podSelector padded
+# with app.kubernetes.io/managed-by=argocd + part-of=smart-education-platform
+# never matches those pods, leaving them fully blocked by default-deny-all.
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: smart-education-platform
+      app.kubernetes.io/managed-by: argocd
+    includeSelectors: false
