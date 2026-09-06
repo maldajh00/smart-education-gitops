@@ -45,12 +45,27 @@ resource "google_project_iam_member" "plan_viewer" {
   member  = "serviceAccount:${google_service_account.plan.email}"
 }
 
-# roles/viewer does not cover the GCS backend's own object read/list
-# calls — `terraform init`/`plan` need this bucket-scoped grant
-# regardless.
+# This config manages google_project_iam_member/google_service_account_
+# iam_member resources itself (this very module, plus ci-identity and
+# artifact-registry's writer binding) — even just computing a plan for
+# those requires reading the current IAM policy, and roles/viewer alone
+# does not cover resourcemanager.projects.getIamPolicy. This is the
+# narrowest predefined role that does, without also granting setIamPolicy
+# (that stays apply-only, via projectIamAdmin below).
+resource "google_project_iam_member" "plan_iam_reviewer" {
+  project = var.project_id
+  role    = "roles/iam.securityReviewer"
+  member  = "serviceAccount:${google_service_account.plan.email}"
+}
+
+# roles/storage.objectViewer alone doesn't cover
+# storage.buckets.getIamPolicy either, needed for the same reason as
+# above (this config also manages google_storage_bucket_iam_member on
+# this bucket) — storage.admin, scoped to just this one non-sensitive
+# state bucket, covers both.
 resource "google_storage_bucket_iam_member" "plan_state_read" {
   bucket = var.state_bucket_name
-  role   = "roles/storage.objectViewer"
+  role   = "roles/storage.admin"
   member = "serviceAccount:${google_service_account.plan.email}"
 }
 
@@ -81,10 +96,11 @@ resource "google_project_iam_member" "apply_roles" {
 }
 
 # apply needs to read AND write state objects (including the lock
-# object) — objectAdmin, scoped to just this bucket, not project-wide
-# storage access.
+# object), plus read/set this bucket's own IAM policy (it manages
+# plan_state_read/apply_state_readwrite themselves) — storage.admin,
+# scoped to just this bucket, not project-wide storage access.
 resource "google_storage_bucket_iam_member" "apply_state_readwrite" {
   bucket = var.state_bucket_name
-  role   = "roles/storage.objectAdmin"
+  role   = "roles/storage.admin"
   member = "serviceAccount:${google_service_account.apply.email}"
 }

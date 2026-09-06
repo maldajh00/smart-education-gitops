@@ -41,6 +41,12 @@ variable "apply_roles" {
     "roles/artifactregistry.admin",
     "roles/iam.serviceAccountAdmin",
     "roles/iam.workloadIdentityPoolAdmin",
+    # This config manages google_project_iam_member/
+    # google_service_account_iam_member resources (ci-identity's WIF
+    # binding, artifact-registry's writer binding, this module's own
+    # role grants) — reading and setting project-level IAM policy is a
+    # distinct permission from any resource-type-admin role above.
+    "roles/resourcemanager.projectIamAdmin",
   ]
 }
 
